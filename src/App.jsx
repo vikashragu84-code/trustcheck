@@ -8,17 +8,48 @@ import FAQ from './components/FAQ';
 import Scanner from './components/Scanner';
 import ResultReport from './components/ResultReport';
 import ScanHistory from './components/ScanHistory';
+import PrivacyPolicy from './components/PrivacyPolicy';
 import Footer from './components/Footer';
 import AuthModal from './components/AuthModal';
 import UpgradeModal from './components/UpgradeModal';
 import LimitModal from './components/LimitModal';
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState('landing'); // 'landing' | 'scanner' | 'result' | 'history'
+  const [currentPage, setCurrentPage] = useState(() => {
+    return window.location.pathname === '/privacy' ? 'privacy' : 'landing';
+  });
   const [scanResult, setScanResult] = useState(null);
 
-  // Scroll handler for targeting page IDs on the landing view
+  // Sync browser location with current page on mount and history popstate
+  useEffect(() => {
+    const handlePopState = () => {
+      if (window.location.pathname === '/privacy') {
+        setCurrentPage('privacy');
+      } else {
+        setCurrentPage('landing');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Scroll handler for targeting page IDs on the landing view & route navigation
   const handleNavigate = (page, targetId = null) => {
+    if (page === 'privacy') {
+      setCurrentPage('privacy');
+      setScanResult(null);
+      if (window.location.pathname !== '/privacy') {
+        window.history.pushState({}, '', '/privacy');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    // Reset URL to root if navigating away from /privacy
+    if (window.location.pathname === '/privacy') {
+      window.history.pushState({}, '', '/');
+    }
+
     if (page === 'landing') {
       setCurrentPage('landing');
       setScanResult(null);
@@ -57,7 +88,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Scroll to top on direct scanner transitions
+  // Scroll to top on direct transitions
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [currentPage]);
@@ -77,6 +108,10 @@ export default function App() {
             <Pricing />
             <FAQ />
           </div>
+        )}
+
+        {currentPage === 'privacy' && (
+          <PrivacyPolicy onNavigate={handleNavigate} />
         )}
 
         {currentPage === 'scanner' && (
@@ -134,4 +169,3 @@ export default function App() {
     </div>
   );
 }
-

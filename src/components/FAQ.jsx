@@ -16,8 +16,8 @@ export default function FAQ() {
       answer: "Absolutely not. TrustCheck is designed to detect known warning signs. A low risk score (e.g. 0-30) simply means no typical danger indicators were found in the scanned content; it does not guarantee that the sender or link is safe. Scammers continuously adapt their strategies. Always verify critical requests independently."
     },
     {
-      question: "Is my information stored?",
-      answer: "No. All scanner logic runs completely locally within your browser. Scanned messages, links, and uploaded screenshot metadata are evaluated client-side and are never transmitted to, or stored on, any remote databases or servers. Your privacy is fully preserved."
+      question: "How is my scan data handled and stored?",
+      answer: "Submitted messages are analyzed by automated risk engines and configured AI providers to generate evaluation reports. Guest scans are processed transiently without being stored. For authenticated users, scan history is saved securely in your Supabase account so you can view past risk assessments."
     }
   ];
 

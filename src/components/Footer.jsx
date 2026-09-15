@@ -55,7 +55,11 @@ export default function Footer({ onNavigate }) {
             <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Legal</h3>
             <ul className="space-y-3">
               <li>
-                <a href="#privacy" onClick={(e) => { e.preventDefault(); alert('Privacy Policy is mock for this demo.'); }} className="text-sm text-slate-400 hover:text-white transition-colors">
+                <a 
+                  href="/privacy" 
+                  onClick={(e) => { e.preventDefault(); onNavigate('privacy'); }} 
+                  className="text-sm text-slate-400 hover:text-white hover:text-glow transition-all"
+                >
                   Privacy Policy
                 </a>
               </li>
