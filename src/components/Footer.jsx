@@ -64,7 +64,11 @@ export default function Footer({ onNavigate }) {
                 </a>
               </li>
               <li>
-                <a href="#terms" onClick={(e) => { e.preventDefault(); alert('Terms of Service are mock for this demo.'); }} className="text-sm text-slate-400 hover:text-white transition-colors">
+                <a 
+                  href="/terms" 
+                  onClick={(e) => { e.preventDefault(); onNavigate('terms'); }} 
+                  className="text-sm text-slate-400 hover:text-white hover:text-glow transition-all"
+                >
                   Terms of Service
                 </a>
               </li>

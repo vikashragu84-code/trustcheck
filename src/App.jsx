@@ -9,6 +9,7 @@ import Scanner from './components/Scanner';
 import ResultReport from './components/ResultReport';
 import ScanHistory from './components/ScanHistory';
 import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfService from './components/TermsOfService';
 import Footer from './components/Footer';
 import AuthModal from './components/AuthModal';
 import UpgradeModal from './components/UpgradeModal';
@@ -16,7 +17,9 @@ import LimitModal from './components/LimitModal';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState(() => {
-    return window.location.pathname === '/privacy' ? 'privacy' : 'landing';
+    if (window.location.pathname === '/privacy') return 'privacy';
+    if (window.location.pathname === '/terms') return 'terms';
+    return 'landing';
   });
   const [scanResult, setScanResult] = useState(null);
 
@@ -25,6 +28,8 @@ export default function App() {
     const handlePopState = () => {
       if (window.location.pathname === '/privacy') {
         setCurrentPage('privacy');
+      } else if (window.location.pathname === '/terms') {
+        setCurrentPage('terms');
       } else {
         setCurrentPage('landing');
       }
@@ -45,8 +50,18 @@ export default function App() {
       return;
     }
 
-    // Reset URL to root if navigating away from /privacy
-    if (window.location.pathname === '/privacy') {
+    if (page === 'terms') {
+      setCurrentPage('terms');
+      setScanResult(null);
+      if (window.location.pathname !== '/terms') {
+        window.history.pushState({}, '', '/terms');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    // Reset URL to root if navigating away from legal pages
+    if (window.location.pathname === '/privacy' || window.location.pathname === '/terms') {
       window.history.pushState({}, '', '/');
     }
 
@@ -112,6 +127,10 @@ export default function App() {
 
         {currentPage === 'privacy' && (
           <PrivacyPolicy onNavigate={handleNavigate} />
+        )}
+
+        {currentPage === 'terms' && (
+          <TermsOfService onNavigate={handleNavigate} />
         )}
 
         {currentPage === 'scanner' && (
