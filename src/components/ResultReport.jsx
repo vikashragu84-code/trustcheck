@@ -117,7 +117,32 @@ export default function ResultReport({ result, onReset }) {
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (displayScore / 100) * circumference;
 
-  const statusLevel = level === 'high' ? 'HIGH' : level === 'caution' ? 'CAUTION' : 'LOW';
+  // Helper for provider display name
+  const getProviderName = (src) => {
+    if (!src || src === 'local') return '';
+    const s = String(src).toLowerCase();
+    if (s === 'groq') return 'Groq';
+    if (s === 'gemini') return 'Gemini';
+    return src.charAt(0).toUpperCase() + src.slice(1);
+  };
+
+  // Helper for scan context label
+  const getScanContextLabel = () => {
+    const type = result?.scanType || '';
+    if (type === 'message') return 'Message';
+    if (type === 'link') return 'Link';
+    if (type === 'screenshot') {
+      const fn = result?.fileName;
+      return fn ? `Screenshot (${fn})` : 'Screenshot';
+    }
+    if (result?.fileName) return `Screenshot (${result.fileName})`;
+    if (result?.summary?.toLowerCase().includes('link') || result?.summary?.toLowerCase().includes('url')) return 'Link';
+    if (result?.summary?.toLowerCase().includes('screenshot')) return 'Screenshot';
+    return 'Submitted Content';
+  };
+
+  const providerDisplayName = getProviderName(result?.source);
+  const isDemo = Boolean(result?.isDemo || result?.useDemo);
 
   return (
     <div className="max-w-4xl mx-auto w-full relative z-10 space-y-6">
@@ -146,14 +171,26 @@ export default function ResultReport({ result, onReset }) {
         </div>
       </div>
 
-      {/* DEMO MODE NOTICE (Shown ONLY when local fallback is used) */}
-      {(result?.isDemo || result?.useDemo) && (
+      {/* AI SOURCE / FALLBACK BANNER */}
+      {isDemo ? (
         <div className="glass-panel border border-cyber-warning/30 bg-cyber-warning/5 rounded-2xl p-4 flex items-start gap-3 animate-fadeIn">
           <AlertTriangle className="w-5 h-5 text-cyber-warning flex-shrink-0 mt-0.5" />
           <div className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            <span className="font-bold text-cyber-warning">Demo Mode:</span>{' '}
-            The primary AI service was temporarily unavailable or unreachable. TrustCheck generated this analysis using its local threat heuristic fallback engine.
+            <span className="font-bold text-cyber-warning">Local Safety Engine:</span>{' '}
+            AI service was unavailable, so TrustCheck used its local safety heuristics.
           </div>
+        </div>
+      ) : (
+        <div className="glass-panel border border-cyber-primary/20 bg-cyber-primary/5 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="w-4 h-4 text-cyber-accent" />
+            <span className="text-xs font-semibold text-slate-200">
+              Live AI Analysis{providerDisplayName ? ` • ${providerDisplayName}` : ''}
+            </span>
+          </div>
+          <span className="text-[10px] font-mono text-emerald-400 font-semibold px-2 py-0.5 rounded-md bg-emerald-400/10 border border-emerald-400/20 uppercase tracking-wider">
+            ACTIVE
+          </span>
         </div>
       )}
 
@@ -185,12 +222,15 @@ export default function ResultReport({ result, onReset }) {
               />
             </svg>
 
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
               <span className={`font-extrabold text-5xl sm:text-6xl ${theme.color} text-glow leading-none`}>
                 {displayScore}
               </span>
-              <span className="text-slate-500 text-[10px] font-bold font-mono tracking-[0.2em] mt-2">
+              <span className="text-slate-500 text-[10px] font-bold font-mono tracking-[0.2em] mt-1.5">
                 RISK SCORE
+              </span>
+              <span className="text-[9px] font-mono text-slate-500/80 mt-1">
+                0 = Lowest Risk • 100 = Highest Risk
               </span>
             </div>
           </div>
@@ -211,17 +251,25 @@ export default function ResultReport({ result, onReset }) {
               </p>
             </div>
 
-            {/* STATUS BADGES */}
-            <div className="mt-5 flex flex-wrap justify-center md:justify-start gap-2">
-              <div className="px-3 py-2 rounded-lg bg-slate-950/50 border border-cyber-border">
-                <span className="text-[10px] font-mono text-slate-500">STATUS</span>
-                <span className={`ml-2 text-[10px] font-mono font-bold ${theme.color}`}>
-                  TC_RISK_{statusLevel}_{safeScore}
+            {/* STATUS & CONTEXT BADGES */}
+            <div className="mt-5 flex flex-wrap justify-center md:justify-start gap-2.5">
+              <div className="px-3.5 py-2 rounded-xl bg-slate-950/50 border border-cyber-border/80 flex items-center gap-2">
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">STATUS</span>
+                <span className={`text-xs font-semibold ${theme.color}`}>
+                  {theme.title}
                 </span>
               </div>
-              <div className="px-3 py-2 rounded-lg bg-slate-950/50 border border-cyber-border">
-                <span className="text-[10px] font-mono text-slate-500">WARNING SIGNALS</span>
-                <span className="ml-2 text-[10px] font-mono font-bold text-slate-300">
+
+              <div className="px-3.5 py-2 rounded-xl bg-slate-950/50 border border-cyber-border/80 flex items-center gap-2">
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">ANALYZED</span>
+                <span className="text-xs font-medium text-slate-200 truncate max-w-[220px]">
+                  {getScanContextLabel()}
+                </span>
+              </div>
+
+              <div className="px-3.5 py-2 rounded-xl bg-slate-950/50 border border-cyber-border/80 flex items-center gap-2">
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">WARNING SIGNALS</span>
+                <span className="text-xs font-semibold text-slate-200 font-mono">
                   {warningSigns.length}
                 </span>
               </div>

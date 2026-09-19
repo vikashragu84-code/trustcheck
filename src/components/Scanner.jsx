@@ -371,7 +371,14 @@ export default function Scanner({ onScanComplete }) {
 
       await refreshScanCount();
 
-      onScanComplete(scanResult);
+      onScanComplete({
+        ...scanResult,
+        scanType: activeTab,
+        fileName:
+          activeTab === 'screenshot'
+            ? uploadedFile?.name || selectedPreset?.name || selectedPreset?.fileName || null
+            : null
+      });
     }
   };
 
