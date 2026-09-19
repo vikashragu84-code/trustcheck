@@ -64,6 +64,7 @@ export default function Scanner({ onScanComplete }) {
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
+
     if (e.type === 'dragenter' || e.type === 'dragover') {
       setDragActive(true);
     } else if (e.type === 'dragleave') {
@@ -78,14 +79,17 @@ export default function Scanner({ onScanComplete }) {
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
+
       if (!file.type.startsWith('image/')) return;
       if (file.size > 10 * 1024 * 1024) return;
 
       setUploadedFile({
+        file,
         name: file.name,
         size: (file.size / 1024).toFixed(1) + ' KB',
         type: file.type
       });
+
       setSelectedPreset(null);
     }
   };
@@ -93,14 +97,17 @@ export default function Scanner({ onScanComplete }) {
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+
       if (!file.type.startsWith('image/')) return;
       if (file.size > 10 * 1024 * 1024) return;
 
       setUploadedFile({
+        file,
         name: file.name,
         size: (file.size / 1024).toFixed(1) + ' KB',
         type: file.type
       });
+
       setSelectedPreset(null);
     }
   };
@@ -119,6 +126,7 @@ export default function Scanner({ onScanComplete }) {
   const clearScreenshot = () => {
     setUploadedFile(null);
     setSelectedPreset(null);
+
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -131,40 +139,68 @@ export default function Scanner({ onScanComplete }) {
 
   const mapAPIResultToFrontend = (data) => {
     let score = Number(data.riskScore);
-    if (!Number.isFinite(score)) score = 50;
+
+    if (!Number.isFinite(score)) {
+      score = 50;
+    }
+
     score = Math.max(0, Math.min(100, Math.round(score)));
 
     let mappedLevel = 'caution';
     const rawLevel = String(data.riskLevel || '').toLowerCase();
+
     if (rawLevel.includes('high') || rawLevel.includes('critical')) {
       mappedLevel = 'high';
     } else if (rawLevel.includes('low')) {
       mappedLevel = 'low';
     } else {
-      if (score >= 70) mappedLevel = 'high';
-      else if (score >= 35) mappedLevel = 'caution';
-      else mappedLevel = 'low';
+      if (score >= 70) {
+        mappedLevel = 'high';
+      } else if (score >= 35) {
+        mappedLevel = 'caution';
+      } else {
+        mappedLevel = 'low';
+      }
     }
 
     const warningSigns = Array.isArray(data.warningSigns)
-      ? data.warningSigns.map((item) => {
-          if (typeof item === 'string') {
-            return { title: 'Suspicious Indicator', description: item };
-          }
-          if (item && typeof item === 'object') {
+      ? data.warningSigns
+          .map((item) => {
+            if (typeof item === 'string') {
+              return {
+                title: 'Suspicious Indicator',
+                description: item
+              };
+            }
+
+            if (item && typeof item === 'object') {
+              return {
+                title:
+                  typeof item.title === 'string'
+                    ? item.title
+                    : 'Suspicious Indicator',
+                description:
+                  typeof item.description === 'string'
+                    ? item.description
+                    : 'A suspicious pattern was identified.'
+              };
+            }
+
             return {
-              title: typeof item.title === 'string' ? item.title : 'Suspicious Indicator',
-              description: typeof item.description === 'string' ? item.description : 'A suspicious pattern was identified.'
+              title: 'Suspicious Indicator',
+              description: 'A suspicious pattern was identified.'
             };
-          }
-          return { title: 'Suspicious Indicator', description: 'A suspicious pattern was identified.' };
-        })
+          })
       : [];
 
     const nextSteps = Array.isArray(data.recommendedActions)
-      ? data.recommendedActions.map((item) => (typeof item === 'string' ? item : String(item))).filter(Boolean)
+      ? data.recommendedActions
+          .map((item) => (typeof item === 'string' ? item : String(item)))
+          .filter(Boolean)
       : Array.isArray(data.nextSteps)
-      ? data.nextSteps.map((item) => (typeof item === 'string' ? item : String(item))).filter(Boolean)
+      ? data.nextSteps
+          .map((item) => (typeof item === 'string' ? item : String(item)))
+          .filter(Boolean)
       : [
           'Do not share passwords, OTPs, PINs, or credentials.',
           'Verify claims independently through official organization websites.'
@@ -173,7 +209,10 @@ export default function Scanner({ onScanComplete }) {
     return {
       score,
       level: mappedLevel,
-      summary: typeof data.summary === 'string' ? data.summary : 'Assessment completed.',
+      summary:
+        typeof data.summary === 'string'
+          ? data.summary
+          : 'Assessment completed.',
       warningSigns,
       nextSteps,
       isDemo: Boolean(data.useDemo),
@@ -184,20 +223,23 @@ export default function Scanner({ onScanComplete }) {
   const handleAnalyze = async () => {
     if (isScanning) return;
 
-    // Check monthly scan entitlement limits (5 for Free/Guest, 100 for Premium)
+    // Check monthly scan entitlement limits
     if (!checkAndEnforceScanLimit()) {
       return;
     }
 
     let textToAnalyze = '';
     let clientFallbackFn = null;
+    let imagePayload = null;
 
     if (activeTab === 'message') {
       if (!inputText.trim()) return;
+
       textToAnalyze = inputText.trim();
       clientFallbackFn = () => analyzeMessage(textToAnalyze);
     } else if (activeTab === 'link') {
       if (!inputLink.trim()) return;
+
       textToAnalyze = inputLink.trim();
       clientFallbackFn = () => analyzeLink(textToAnalyze);
     } else if (activeTab === 'screenshot') {
@@ -207,6 +249,32 @@ export default function Scanner({ onScanComplete }) {
       } else if (uploadedFile) {
         textToAnalyze = `Uploaded image screenshot file: ${uploadedFile.name}`;
         clientFallbackFn = () => analyzeScreenshot(uploadedFile.name);
+
+        if (uploadedFile.file) {
+          try {
+            const base64Data = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const res = reader.result;
+                if (typeof res === 'string') {
+                  const b64 = res.includes(',') ? res.split(',')[1] : res;
+                  resolve(b64);
+                } else {
+                  reject(new Error('FileReader result is not a string'));
+                }
+              };
+              reader.onerror = (err) => reject(err);
+              reader.readAsDataURL(uploadedFile.file);
+            });
+
+            imagePayload = {
+              mimeType: uploadedFile.type || uploadedFile.file.type,
+              data: base64Data
+            };
+          } catch (fileErr) {
+            console.warn('[TrustCheck UI] Base64 conversion failed:', fileErr);
+          }
+        }
       } else {
         return;
       }
@@ -219,12 +287,24 @@ export default function Scanner({ onScanComplete }) {
     let apiData = null;
 
     try {
-      console.log('[TrustCheck UI] Requesting backend risk analysis...');
+      console.log(
+        '[TrustCheck UI] Requesting backend risk analysis...'
+      );
+
+      const requestBody = {
+        message: textToAnalyze
+      };
+
+      if (imagePayload) {
+        requestBody.image = imagePayload;
+      }
 
       const response = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToAnalyze })
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -232,14 +312,29 @@ export default function Scanner({ onScanComplete }) {
       }
 
       apiData = await response.json();
-      console.log('[TrustCheck UI] Received API response:', apiData);
+
+      console.log(
+        '[TrustCheck UI] Received API response:',
+        apiData
+      );
 
       scanResult = mapAPIResultToFrontend(apiData);
-
     } catch (err) {
-      console.warn('[TrustCheck UI] Network or API failure. Using client fallback:', err);
-      const fallbackData = clientFallbackFn ? clientFallbackFn() : analyzeMessage(textToAnalyze);
-      apiData = { ...fallbackData, useDemo: true, source: 'local' };
+      console.warn(
+        '[TrustCheck UI] Network or API failure. Using client fallback:',
+        err
+      );
+
+      const fallbackData = clientFallbackFn
+        ? clientFallbackFn()
+        : analyzeMessage(textToAnalyze);
+
+      apiData = {
+        ...fallbackData,
+        useDemo: true,
+        source: 'local'
+      };
+
       scanResult = mapAPIResultToFrontend(apiData);
     } finally {
       setIsScanning(false);
@@ -247,23 +342,33 @@ export default function Scanner({ onScanComplete }) {
 
     if (scanResult) {
       if (user?.id) {
-        // Save scan record for logged-in user
         await saveScanRecord({
           userId: user.id,
           messageText: textToAnalyze,
           riskScore: apiData?.riskScore ?? scanResult.score,
-          riskLevel: apiData?.riskLevel || (scanResult.level === 'high' ? 'High risk indicators' : scanResult.level === 'low' ? 'Low apparent risk' : 'Caution'),
+          riskLevel:
+            apiData?.riskLevel ||
+            (scanResult.level === 'high'
+              ? 'High risk indicators'
+              : scanResult.level === 'low'
+              ? 'Low apparent risk'
+              : 'Caution'),
           summary: apiData?.summary || scanResult.summary,
-          warningSigns: apiData?.warningSigns || scanResult.warningSigns,
-          recommendedActions: apiData?.recommendedActions || apiData?.nextSteps || scanResult.nextSteps,
-          source: apiData?.source || scanResult.source || 'gemini'
+          warningSigns:
+            apiData?.warningSigns || scanResult.warningSigns,
+          recommendedActions:
+            apiData?.recommendedActions ||
+            apiData?.nextSteps ||
+            scanResult.nextSteps,
+          source:
+            apiData?.source ||
+            scanResult.source ||
+            'gemini'
         });
       } else {
-        // Track guest scan count locally (guests do not save history to DB)
         incrementGuestScanCount();
       }
 
-      // Refresh scan limit count
       await refreshScanCount();
 
       onScanComplete(scanResult);
@@ -271,9 +376,18 @@ export default function Scanner({ onScanComplete }) {
   };
 
   const isButtonDisabled = () => {
-    if (activeTab === 'message') return !inputText.trim();
-    if (activeTab === 'link') return !inputLink.trim();
-    if (activeTab === 'screenshot') return !uploadedFile && !selectedPreset;
+    if (activeTab === 'message') {
+      return !inputText.trim();
+    }
+
+    if (activeTab === 'link') {
+      return !inputLink.trim();
+    }
+
+    if (activeTab === 'screenshot') {
+      return !uploadedFile && !selectedPreset;
+    }
+
     return true;
   };
 
@@ -304,6 +418,7 @@ export default function Scanner({ onScanComplete }) {
                 <div className="w-11 h-11 rounded-2xl bg-cyber-primary/15 border border-cyber-primary/30 flex items-center justify-center shadow-[0_0_20px_-8px_rgba(37,99,235,0.8)]">
                   <ShieldAlert className="w-5 h-5 text-cyber-secondary" />
                 </div>
+
                 <span className="absolute -right-1 -bottom-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-950" />
               </div>
 
@@ -312,11 +427,13 @@ export default function Scanner({ onScanComplete }) {
                   <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
                     TrustCheck Scanner
                   </h2>
+
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyber-primary/10 border border-cyber-primary/20 text-[9px] font-bold uppercase tracking-wider text-cyber-accent">
                     <Sparkles className="w-2.5 h-2.5" />
                     AI Multi-Model Engine
                   </span>
                 </div>
+
                 <p className="text-xs sm:text-sm text-slate-400 mt-1.5 leading-relaxed">
                   Analyze suspicious messages, links, and screenshots for scam warning signs.
                 </p>
@@ -333,24 +450,31 @@ export default function Scanner({ onScanComplete }) {
             <div className="rounded-xl bg-slate-950/35 border border-cyber-border/70 px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-[10px] sm:text-xs text-slate-300 font-medium">Risk scoring</span>
+                <span className="text-[10px] sm:text-xs text-slate-300 font-medium">
+                  Risk scoring
+                </span>
               </div>
             </div>
+
             <div className="rounded-xl bg-slate-950/35 border border-cyber-border/70 px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="w-3.5 h-3.5 text-cyber-secondary" />
-                <span className="text-[10px] sm:text-xs text-slate-300 font-medium">Scam signals</span>
+                <span className="text-[10px] sm:text-xs text-slate-300 font-medium">
+                  Scam signals
+                </span>
               </div>
             </div>
+
             <div className="rounded-xl bg-slate-950/35 border border-cyber-border/70 px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <LockKeyhole className="w-3.5 h-3.5 text-cyber-accent" />
-                <span className="text-[10px] sm:text-xs text-slate-300 font-medium">Safety first</span>
+                <span className="text-[10px] sm:text-xs text-slate-300 font-medium">
+                  Safety first
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Loading Overlay */}
           {isScanning && (
             <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col justify-center items-center p-8 z-30 animate-fadeIn">
               <div className="relative w-28 h-28 mb-6">
@@ -359,6 +483,7 @@ export default function Scanner({ onScanComplete }) {
                 <div className="absolute inset-0 rounded-full border border-transparent border-t-cyber-secondary animate-radar-sweep shadow-[0_0_20px_rgba(59,130,246,0.45)]" />
                 <div className="absolute inset-[46%] rounded-full bg-cyber-secondary animate-ping" />
                 <div className="absolute inset-[48%] rounded-full bg-cyber-secondary shadow-[0_0_15px_3px_rgba(59,130,246,0.8)]" />
+
                 <div className="absolute inset-0 flex items-center justify-center">
                   <ShieldAlert className="w-7 h-7 text-white/90" />
                 </div>
@@ -371,52 +496,79 @@ export default function Scanner({ onScanComplete }) {
                     Analyzing Threat Factors
                   </span>
                 </div>
+
                 <h3 className="font-display font-bold text-xl sm:text-2xl text-white tracking-tight">
                   Running Risk Heuristics
                 </h3>
+
                 <p className="text-xs sm:text-sm text-slate-300 mt-2 min-h-[20px]">
                   {scanSteps[scanStep]}
                 </p>
+
                 <div className="w-56 h-1.5 bg-cyber-border rounded-full overflow-hidden mx-auto mt-5">
                   <div
                     className="h-full bg-cyber-secondary transition-all duration-500 ease-out"
-                    style={{ width: `${((scanStep + 1) / scanSteps.length) * 100}%` }}
+                    style={{
+                      width: `${((scanStep + 1) / scanSteps.length) * 100}%`
+                    }}
                   />
                 </div>
               </div>
             </div>
           )}
 
-          {/* Navigation Tabs */}
           <div className="bg-slate-950/35 border border-cyber-border/70 rounded-2xl p-1.5 mb-6 flex gap-1">
-            <button type="button" onClick={() => switchTab('message')} className={getTabClass('message')}>
+            <button
+              type="button"
+              onClick={() => switchTab('message')}
+              className={getTabClass('message')}
+            >
               <MessageSquare className="w-4 h-4" />
               <span>Message</span>
             </button>
-            <button type="button" onClick={() => switchTab('link')} className={getTabClass('link')}>
+
+            <button
+              type="button"
+              onClick={() => switchTab('link')}
+              className={getTabClass('link')}
+            >
               <LinkIcon className="w-4 h-4" />
               <span>Website Link</span>
             </button>
-            <button type="button" onClick={() => switchTab('screenshot')} className={getTabClass('screenshot')}>
+
+            <button
+              type="button"
+              onClick={() => switchTab('screenshot')}
+              className={getTabClass('screenshot')}
+            >
               <ImageIcon className="w-4 h-4" />
               <span>Screenshot</span>
             </button>
           </div>
 
-          {/* Input Views */}
           <div className="mb-6">
             {activeTab === 'message' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-white">Paste suspicious text</p>
-                    <p className="text-xs text-slate-500 mt-0.5">SMS, WhatsApp, email or social media messages</p>
+                    <p className="text-sm font-semibold text-white">
+                      Paste suspicious text
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      SMS, WhatsApp, email or social media messages
+                    </p>
                   </div>
-                  <span className="text-[10px] font-mono text-slate-600">TEXT</span>
+
+                  <span className="text-[10px] font-mono text-slate-600">
+                    TEXT
+                  </span>
                 </div>
 
                 <div className="relative">
-                  <label htmlFor="message-input" className="sr-only">Suspicious message text</label>
+                  <label htmlFor="message-input" className="sr-only">
+                    Suspicious message text
+                  </label>
+
                   <textarea
                     id="message-input"
                     rows="6"
@@ -426,6 +578,7 @@ export default function Scanner({ onScanComplete }) {
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                   />
+
                   {inputText && (
                     <button
                       type="button"
@@ -439,8 +592,15 @@ export default function Scanner({ onScanComplete }) {
                 </div>
 
                 <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                  <span>{inputText.length.toLocaleString()} / 5,000 characters</span>
-                  {inputText.trim() && <span className="text-emerald-400/90 font-sans font-medium">Ready for analysis</span>}
+                  <span>
+                    {inputText.length.toLocaleString()} / 5,000 characters
+                  </span>
+
+                  {inputText.trim() && (
+                    <span className="text-emerald-400/90 font-sans font-medium">
+                      Ready for analysis
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -448,15 +608,24 @@ export default function Scanner({ onScanComplete }) {
             {activeTab === 'link' && (
               <div className="space-y-3">
                 <div>
-                  <p className="text-sm font-semibold text-white">Check a suspicious website</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Paste the URL you received in a message or email</p>
+                  <p className="text-sm font-semibold text-white">
+                    Check a suspicious website
+                  </p>
+
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Paste the URL you received in a message or email
+                  </p>
                 </div>
 
                 <div className="relative">
-                  <label htmlFor="link-input" className="sr-only">Suspicious link URL</label>
+                  <label htmlFor="link-input" className="sr-only">
+                    Suspicious link URL
+                  </label>
+
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
                     <LinkIcon className="w-5 h-5" />
                   </div>
+
                   <input
                     id="link-input"
                     type="text"
@@ -467,6 +636,7 @@ export default function Scanner({ onScanComplete }) {
                     value={inputLink}
                     onChange={(e) => setInputLink(e.target.value)}
                   />
+
                   {inputLink && (
                     <button
                       type="button"
@@ -481,7 +651,10 @@ export default function Scanner({ onScanComplete }) {
 
                 <div className="flex items-center gap-2 text-[10px] text-slate-500">
                   <AlertCircle className="w-3.5 h-3.5 text-cyber-warning" />
-                  <span>Never enter login passwords or bank PINs on unverified sites.</span>
+                  <span>
+                    Never enter login passwords or bank PINs on unverified
+                    sites.
+                  </span>
                 </div>
               </div>
             )}
@@ -489,13 +662,20 @@ export default function Scanner({ onScanComplete }) {
             {activeTab === 'screenshot' && (
               <div className="space-y-5">
                 <div>
-                  <p className="text-sm font-semibold text-white">Analyze a suspicious screenshot</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Upload a screenshot file or choose a preset demo scenario</p>
+                  <p className="text-sm font-semibold text-white">
+                    Analyze a suspicious screenshot
+                  </p>
+
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Upload a screenshot file or choose a preset demo scenario
+                  </p>
                 </div>
 
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Demo preset scenarios</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                      Demo preset scenarios
+                    </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -511,10 +691,18 @@ export default function Scanner({ onScanComplete }) {
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs sm:text-sm font-semibold">{preset.name}</span>
-                          {selectedPreset?.id === preset.id && <CheckCircle2 className="w-4 h-4 text-cyber-secondary flex-shrink-0" />}
+                          <span className="text-xs sm:text-sm font-semibold">
+                            {preset.name}
+                          </span>
+
+                          {selectedPreset?.id === preset.id && (
+                            <CheckCircle2 className="w-4 h-4 text-cyber-secondary flex-shrink-0" />
+                          )}
                         </div>
-                        <div className="text-[10px] text-slate-500 font-mono mt-1">{preset.fileName}</div>
+
+                        <div className="text-[10px] text-slate-500 font-mono mt-1">
+                          {preset.fileName}
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -539,13 +727,25 @@ export default function Scanner({ onScanComplete }) {
                     accept="image/png,image/jpeg,image/jpg,image/webp"
                     onChange={handleFileChange}
                   />
+
                   <div className="w-10 h-10 rounded-xl bg-cyber-primary/10 border border-cyber-primary/20 flex items-center justify-center mb-2.5 text-cyber-secondary">
                     <Upload className="w-5 h-5" />
                   </div>
-                  <p className="text-sm font-semibold text-slate-200">Drop your screenshot image here</p>
-                  <p className="text-xs text-slate-500 mt-1">or <span className="text-cyber-secondary underline underline-offset-2">browse files</span></p>
+
+                  <p className="text-sm font-semibold text-slate-200">
+                    Drop your screenshot image here
+                  </p>
+
+                  <p className="text-xs text-slate-500 mt-1">
+                    or{' '}
+                    <span className="text-cyber-secondary underline underline-offset-2">
+                      browse files
+                    </span>
+                  </p>
+
                   <div className="flex items-center gap-2 mt-3 text-[10px] text-slate-600 font-mono">
-                    <span>PNG</span> • <span>JPG</span> • <span>WEBP</span> • <span>MAX 10MB</span>
+                    <span>PNG</span> • <span>JPG</span> • <span>WEBP</span> •{' '}
+                    <span>MAX 10MB</span>
                   </div>
                 </div>
 
@@ -555,15 +755,22 @@ export default function Scanner({ onScanComplete }) {
                       <div className="w-8 h-8 rounded-lg bg-emerald-400/10 border border-emerald-400/20 flex items-center justify-center flex-shrink-0">
                         <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                       </div>
+
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-slate-200 truncate">
-                          {selectedPreset ? selectedPreset.name : uploadedFile.name}
+                          {selectedPreset
+                            ? selectedPreset.name
+                            : uploadedFile.name}
                         </p>
+
                         <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                          {selectedPreset ? 'DEMO PRESET' : uploadedFile.size}
+                          {selectedPreset
+                            ? 'DEMO PRESET'
+                            : uploadedFile.size}
                         </p>
                       </div>
                     </div>
+
                     <button
                       type="button"
                       onClick={clearScreenshot}
@@ -577,20 +784,24 @@ export default function Scanner({ onScanComplete }) {
             )}
           </div>
 
-          {/* Safety Reminder */}
           <div className="flex items-start gap-3 bg-slate-950/50 border border-cyber-border/70 rounded-xl p-3.5 sm:p-4 mb-5">
             <div className="w-8 h-8 rounded-lg bg-cyber-warning/10 border border-cyber-warning/15 flex items-center justify-center flex-shrink-0">
               <AlertCircle className="w-4 h-4 text-cyber-warning" />
             </div>
+
             <div>
-              <p className="text-xs font-semibold text-slate-200">Educational Safety Aid</p>
+              <p className="text-xs font-semibold text-slate-200">
+                Educational Safety Aid
+              </p>
+
               <p className="text-[10px] sm:text-xs text-slate-400 leading-relaxed mt-0.5">
-                TrustCheck evaluates scam indicators for educational purposes. Never enter real passwords or banking PINs in unverified forms.
+                TrustCheck evaluates scam indicators for educational
+                purposes. Never enter real passwords or banking PINs in
+                unverified forms.
               </p>
             </div>
           </div>
 
-          {/* Action Button */}
           <button
             type="button"
             onClick={handleAnalyze}
@@ -602,8 +813,16 @@ export default function Scanner({ onScanComplete }) {
             }`}
           >
             <ShieldAlert className="w-4 h-4" />
-            <span>{isScanning ? 'Analyzing Threat Signals...' : 'Analyze Scam Warning Signs'}</span>
-            {!isScanning && <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />}
+
+            <span>
+              {isScanning
+                ? 'Analyzing Threat Signals...'
+                : 'Analyze Scam Warning Signs'}
+            </span>
+
+            {!isScanning && (
+              <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+            )}
           </button>
         </div>
       </div>

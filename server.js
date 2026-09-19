@@ -27,7 +27,7 @@ app.use(
 // does not require CORS middleware or wildcard Access-Control-Allow-Origin headers.
 
 // Configure JSON body parser with 100kb payload limit to prevent body size abuse
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '15mb' }));
 
 const port = process.env.PORT || 5173;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -46,7 +46,7 @@ const analyzeLimiter = rateLimit({
 // TRUSTCHECK AI ANALYSIS ROUTE
 // ==========================================
 app.post('/api/analyze', analyzeLimiter, async (req, res) => {
-  const { message } = req.body || {};
+  const { message, image } = req.body || {};
 
   if (typeof message !== 'string' || !message.trim()) {
     return res.status(400).json({ error: 'Message text is required' });
@@ -61,7 +61,7 @@ app.post('/api/analyze', analyzeLimiter, async (req, res) => {
   console.log('\n[TrustCheck API] Received analysis request...');
 
   try {
-    const result = await providerManager.analyze(cleanMessage);
+    const result = await providerManager.analyze(cleanMessage, image || null);
     return res.json(result);
   } catch (err) {
     console.error('[TrustCheck API] Unexpected exception during analysis execution:', err);
